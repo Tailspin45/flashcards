@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/
+build/
+*.dmg
+*.zip
+.env
+.DS_Store
+.vscode/
+.idea/
+*.log
+flashcards-state.json

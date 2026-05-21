@@ -1,0 +1,30 @@
+{
+  "name": "flashcards",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir --publish=never",
+    "dist": "electron-builder --publish=never"
+  },
+  "devDependencies": {
+    "electron": "^39.8.7",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.example.flashcards",
+    "productName": "Flashcards",
+    "files": [
+      "**/*"
+    ],
+    "extraResources": [
+      "flashcards.csv"
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    }
+  }
+}

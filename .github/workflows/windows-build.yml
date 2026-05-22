@@ -1,0 +1,61 @@
+name: Build Windows (unsigned)
+
+# NOTE: This produces an unsigned Windows build. Users will see a SmartScreen
+# warning on first run. To enable signing, see docs/WINDOWS_SIGNING.md and
+# uncomment the CSC_LINK / CSC_KEY_PASSWORD env block in the build step.
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*', 'release-*' ]
+  workflow_dispatch: {}
+
+jobs:
+  build-win:
+    name: Build Windows
+    runs-on: windows-latest
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          # Skip the macOS-only afterSign hook on Windows runners.
+          SKIP_NOTARIZE: '1'
+          # Uncomment when you have a Windows code-signing certificate:
+          # CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          # CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: npm run dist -- --win
+
+      - name: Generate SHA256SUMS
+        shell: pwsh
+        run: |
+          cd dist
+          $files = Get-ChildItem -File -Include *.exe, *.msi -Recurse:$false
+          if (-not $files) { Write-Error 'No Windows artifacts produced'; exit 1 }
+          $lines = $files | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          }
+          $lines | Set-Content -Path SHA256SUMS.txt -Encoding ascii
+          Write-Host '--- SHA256SUMS.txt ---'
+          Get-Content SHA256SUMS.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flashcards-Windows
+          path: |
+            dist/*.exe
+            dist/*.msi
+            dist/SHA256SUMS.txt

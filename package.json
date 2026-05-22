@@ -1,6 +1,6 @@
 {
   "name": "flashcards",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "main": "main.js",
   "scripts": {
@@ -9,22 +9,44 @@
     "dist": "electron-builder --publish=never"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
     "electron": "^39.8.7",
     "electron-builder": "^26.8.1"
   },
   "build": {
-    "appId": "com.example.flashcards",
+    "appId": "com.aerodite.flashcards",
     "productName": "Flashcards",
     "files": [
-      "**/*"
+      "**/*",
+      "!**/scripts/notarize.js"
     ],
     "extraResources": [
       "flashcards.csv"
     ],
+    "afterSign": "scripts/notarize.js",
     "mac": {
       "target": [
-        "dmg"
+        { "target": "dmg", "arch": ["universal"] }
+      ],
+      "category": "public.app-category.education",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "sign": false
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

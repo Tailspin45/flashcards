@@ -12,11 +12,6 @@ jobs:
     runs-on: macos-latest
     env:
       NODE_OPTIONS: --max_old_space_size=4096
-      MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
-      MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,31 +19,75 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Decode macOS signing cert
+      - name: Validate signing secret
+        env:
+          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
         run: |
           if [ -z "$MAC_CERT_P12_BASE64" ]; then
-            echo "Missing secret: MAC_CERT_P12_BASE64"
+            echo "::error::Missing secret MAC_CERT_P12_BASE64"
             exit 1
           fi
-          echo "$MAC_CERT_P12_BASE64" | base64 --decode > mac_signing_cert.p12
+          # Strip whitespace/newlines and decode to validate format.
+          echo "$MAC_CERT_P12_BASE64" | tr -d '\r\n\t ' | base64 --decode > /tmp/mac_signing_cert.p12
+          file /tmp/mac_signing_cert.p12
+          # openssl will exit non-zero if the p12 is malformed.
+          openssl pkcs12 -in /tmp/mac_signing_cert.p12 \
+            -passin "pass:${{ secrets.MAC_CERT_PASSWORD }}" \
+            -nokeys -nomacver -noout 2>&1 | head -5
 
-      - name: Build (electron-builder)
+      - name: Build, sign, and notarize
         env:
-          CSC_LINK: mac_signing_cert.p12
+          # electron-builder picks up the cert+password from these.
+          CSC_LINK: /tmp/mac_signing_cert.p12
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          # afterSign hook reads these for notarytool.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist
+
+      - name: Notarize DMG and staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for dmg in dist/*.dmg; do
+            echo "==> Notarizing $dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            echo "==> Stapling $dmg"
+            # Retry a few times to ride out CloudKit ticket propagation lag.
+            for i in 1 2 3 4 5; do
+              if xcrun stapler staple "$dmg"; then break; fi
+              echo "   staple attempt $i failed, sleeping 20s"
+              sleep 20
+            done
+            xcrun stapler validate "$dmg"
+            spctl --assess --type open --context context:primary-signature -vv "$dmg" || true
+          done
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          shasum -a 256 *.dmg | tee SHA256SUMS.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mac-artifacts
-          path: dist/*.dmg
+          name: Flashcards-macOS
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS.txt
 
-      - name: Cleanup keychain
-        run: |
-          rm -f mac_signing_cert.p12
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/mac_signing_cert.p12

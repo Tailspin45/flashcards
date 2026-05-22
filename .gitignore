@@ -2,6 +2,8 @@ node_modules/
 dist/
 out/
 build/
+# but keep the entitlements file we ship
+!build/entitlements.mac.plist
 *.dmg
 *.zip
 .env

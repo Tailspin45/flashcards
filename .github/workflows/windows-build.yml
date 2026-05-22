@@ -40,8 +40,10 @@ jobs:
       - name: Generate SHA256SUMS
         shell: pwsh
         run: |
-          cd dist
-          $files = Get-ChildItem -File -Include *.exe, *.msi -Recurse:$false
+          Set-Location dist
+          # PowerShell quirk: -Include needs a wildcard path or -Recurse to fire,
+          # so use -Filter (single pattern) and combine the results.
+          $files = @(Get-ChildItem -File -Filter '*.exe') + @(Get-ChildItem -File -Filter '*.msi')
           if (-not $files) { Write-Error 'No Windows artifacts produced'; exit 1 }
           $lines = $files | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()

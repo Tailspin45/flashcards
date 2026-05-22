@@ -75,11 +75,18 @@ jobs:
             spctl --assess --type open --context context:primary-signature -vv "$dmg" || true
           done
 
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          shasum -a 256 *.dmg | tee SHA256SUMS.txt
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flashcards-macOS
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS.txt
 
       - name: Cleanup
         if: always()

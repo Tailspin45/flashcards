@@ -37,6 +37,20 @@ jobs:
           # CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: npm run dist -- --win
 
+      - name: Generate SHA256SUMS
+        shell: pwsh
+        run: |
+          cd dist
+          $files = Get-ChildItem -File -Include *.exe, *.msi -Recurse:$false
+          if (-not $files) { Write-Error 'No Windows artifacts produced'; exit 1 }
+          $lines = $files | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          }
+          $lines | Set-Content -Path SHA256SUMS.txt -Encoding ascii
+          Write-Host '--- SHA256SUMS.txt ---'
+          Get-Content SHA256SUMS.txt
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -44,3 +58,4 @@ jobs:
           path: |
             dist/*.exe
             dist/*.msi
+            dist/SHA256SUMS.txt

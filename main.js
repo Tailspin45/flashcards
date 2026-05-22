@@ -6,7 +6,10 @@ const fs = require('fs');
 
 // Paths
 const USER_DATA = app.getPath('userData');
-const RESOURCES = __dirname;
+// In a packaged build the bundled `flashcards.csv` is shipped via
+// electron-builder's `extraResources` and lives at `process.resourcesPath`,
+// NOT inside app.asar. During `npm run start` the file sits next to main.js.
+const RESOURCES = app.isPackaged ? process.resourcesPath : __dirname;
 const FLASHCARDS_CSV_PATH = process.env.FLASHCARDS_CSV_PATH
     ? path.resolve(process.env.FLASHCARDS_CSV_PATH)
     : path.join(RESOURCES, 'flashcards.csv');
